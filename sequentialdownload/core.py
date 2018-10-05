@@ -59,6 +59,21 @@ def set_seq_t1(tor, flag):
     handle = tor.handle
     if info and handle:
         log.info("Setting sequential_download:%s for %s", flag, info.name())
+        if tor.options['prioritize_first_last_pieces']:
+            priorities = handle.piece_priorities()
+            flist = info.files()
+            for idx in range(info.num_files()):
+                file_size = flist[idx].size
+                one_percent_bytes = int(0.01 * file_size)
+                # Get the pieces for the byte offsets
+                last_start = info.map_file(idx, file_size - one_percent_bytes, 0).piece
+                last_end = info.map_file(idx, max(file_size - 1, 0),0).piece + 1
+                # Set the pieces in last range to priority 7
+                # if they are not marked as do not download
+                priorities[last_start:last_end] = [
+                    p and 7 for p in priorities[last_start:last_end]
+                ]
+            handle.prioritize_pieces(priorities)
         handle.set_sequential_download(flag)
     else:
         deferLater(reactor, 3, set_seq_t1, tor, flag)
